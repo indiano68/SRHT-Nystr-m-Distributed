@@ -62,22 +62,10 @@ if __name__ =='__main__':
     mnist_matrix = matricize_mnist(mnist_path)
     mnist_matrix = build_dense_spd(mnist_matrix[0:sub_len],decay)
 
-    # sketch = build_gaussian_sketching((mnist_matrix.shape[1],trunc + 5))
-    sketch = build_srht_sketching((mnist_matrix.shape[1],trunc + 5))
     start_random = perf_counter()
-    # U,S,Vh = random_truncated_svd(mnist_matrix,trunc,5,sketching=sketch)
+    sketch = build_srht_sketching((mnist_matrix.shape[1],trunc + 5))
     U,S = random_truncated_nystrom(mnist_matrix,trunc,5,sketching=sketch)
     stop_random = perf_counter()
-    approx_matrix_rand =U@np.diag(S)@np.transpose(U)
-
-    start_deterministic = perf_counter()
-    # U,S,Vh = np.linalg.svd(mnist_matrix,full_matrices=False)
-    stop_deterministic = perf_counter()
-    S[trunc:] =0
-    # approx_matrix =U@np.diag(S)@Vh
-    
-    print(mnist_matrix.shape, np.linalg.matrix_rank(mnist_matrix),np.trace(mnist_matrix))
-    print(approx_matrix_rand.shape, np.linalg.matrix_rank(approx_matrix_rand),np.trace(approx_matrix_rand))
-    # print(approx_matrix.shape,np.linalg.matrix_rank(approx_matrix),np.trace(approx_matrix))
-    print(f"Nystrom t: {stop_random-start_random}\n SVD t: {stop_deterministic -start_deterministic}")
+    print(np.sum(S))
+    print(f"Nystrom t: {stop_random-start_random}\n")
 
