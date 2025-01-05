@@ -93,13 +93,16 @@ if __name__ == '__main__':
     	
     row_comm = comm.Split(color=grid_coord[0], key=comm.rank)
     col_comm = comm.Split(color=grid_coord[1], key=comm.rank)
-
+    diag_comm = comm.Split(color=(grid_coord[0] == grid_coord[1]), key=comm.rank)
     if comm.rank == 0: start = perf_counter()
     matrix_local = build_dense_spd_local(mnist_matrix,decay,grid_coord[0]*n_local, grid_coord[1]*n_local,n_local)
     if comm.rank == 0: 
         print(f"Build local {perf_counter()-start}")
         stdout.flush()
-
+    local_trace = 0
+    total_trace = 0
+    if (grid_coord[0] == grid_coord[1]): local_trace = np.trace(matrix_local)
+    total_trace = diag_comm.reduce(local_trace)
     start = perf_counter()
     sigma_i = build_srht_sketching_local((n,l),grid_side,grid_coord[0],r_state=r_s,d_state=d_s)
     sigma_j = build_srht_sketching_local((n,l),grid_side,grid_coord[1],r_state=r_s,d_state=d_s)
@@ -141,11 +144,7 @@ if __name__ == '__main__':
         U = Q@U
         S =np.power(S,2)
         stop = perf_counter()
-        matrix_total = build_dense_spd(mnist_matrix,100)
-        S_mnist= np.linalg.svd(matrix_total,compute_uv=False)
-        A_norm = np.sum(S_mnist)
-        S_tot= np.linalg.svd(matrix_total- U@np.diag(S)@np.transpose(U),compute_uv=False)
-        norm_tot = np.sum(S_tot)/A_norm
+        norm_tot = (total_trace- np.sum(S))/total_trace
         print(f"{comm.size} {n} {trunc} {decay} {norm_tot} {stop-start}")
         
         
