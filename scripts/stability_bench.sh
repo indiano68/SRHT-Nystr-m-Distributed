@@ -29,7 +29,7 @@ for l in "${values_l[@]}"; do
             output=$(srun -n64 python src\\mpi_main.py 65536 "$trunc" "$l")
 
             # Append the result to the CSV file
-            echo "$trunc,$output" >> "$output_file"
+            echo "$output" >> "$output_file"
         fi
     done
     
