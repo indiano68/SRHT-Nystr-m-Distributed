@@ -19,7 +19,7 @@ echo "n, trunc, l, norm, time, decay, comms" > "$output_file"  # Write the heade
 
 for dim in "${values_dim[@]}"; do
 
-    output=$(srun -n1 python src/mpi_main.py "$dim" 200)
+    output=$(srun --cpu-freq=2000000 -n1 python src/mpi_main.py "$dim" 200)
     echo "$output" >> "$output_file"
 done
     

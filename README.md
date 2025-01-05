@@ -228,6 +228,34 @@ def build_gaussian_sketching(shape: tuple[int, int]):
 
 The algorithm as been implemented with particular attention to memory usage, by deleting (by reassignment) obsolete objects when necessary. The `numpy` and `scipy` packages have been used for linear algebra routines.
 
+## Accuracy and stability analysis  
+
+To study the accuracy of the algorithm I have run it on a matrix generated using the **MNIST** dataset as described in [**1**] with dimension $m=65536$ on a grid of 64 processes ($8\times8$) for both BSRHT and Gaussian sketching matrices.
+
+The result display the behavior  of the algorithm for different sampling sizes of the sketching matrix and different truncation ranks.
+
+![accuracy](results/plots/accuracy.png)
+
+As one can see from the results the algorithm remains stable all the tested configuration for both sketching matrices, which also display analogue accuracy.
+
+## Performance
+
+### Serial performance
+
+### Parallel performance
+
+To test the parallel efficiency of the algorithm a strong scaling study was performed using the maximum matrix size obtainable by the **MNIST** dataset of $n =65536$ for $k = 200 l =205$, wich seemed like parameters reasonably close to a real word scenario.
+
+<img src="results/plots/parallel_runtime.png" alt="runtime" width="400" >
+
+The runtime plot shows that the algorithm scales reasonably well ( the prot is $\ln_2$ in both axis) showing that quadrupling the number of processes reduces the runtime to one fourth. The last few points have a slight suboptimal behavior given that we probably reached the memory bandwidth limit.
+
+It is also interesting to compute the expected speedup,
+<img src="results/plots/parallel_speedup.png" alt="speedup" width="400" >
+
+This plot too shows a saturating behavior for a speedup of 23. It his hard to say if this is a Amdahl's saturation, due to the serial component of the code, or if a memory bandwidth saturation. I could however not test a multi-node setup due to missing hardware.
+It is noteworthy that no communication effects are tangible in the collected data.
+
 ## References
 
 * [**1**] Block subsampled randomized Hadamard transform for low-rank

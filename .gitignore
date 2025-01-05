@@ -3,3 +3,4 @@ datasets/
 *.code-workspace
 **/__pycache__/
 *_test.py
+*.qti*
