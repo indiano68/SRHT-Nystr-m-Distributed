@@ -19,7 +19,7 @@ echo "n, trunc, l, norm, time, decay, comms" > "$output_file"  # Write the heade
 
 for proc in "${values_proc[@]}"; do
 
-    output=$(srun -n"$proc" python src\\mpi_main.py 65536 200 )
+    output=$(srun -n"$proc" python src/mpi_main.py 65536 200 )
     echo "$output" >> "$output_file"
 done
     

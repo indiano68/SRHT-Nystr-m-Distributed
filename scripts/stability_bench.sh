@@ -26,7 +26,7 @@ for l in "${values_l[@]}"; do
     for trunc in "${values_trunc[@]}"; do
         if [ "$trunc" -le "$l" ]; then
             # Run the Python script with the current values of a and b
-            output=$(srun -n64 python src\\mpi_main.py 65536 "$trunc" "$l")
+            output=$(srun -n64 python src/mpi_main.py 65536 "$trunc" "$l")
 
             # Append the result to the CSV file
             echo "$output" >> "$output_file"
