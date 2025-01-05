@@ -85,7 +85,7 @@ if __name__ == '__main__':
         start = perf_counter()
         mnist_matrix = matricize_mnist(mnist_path)
         mnist_matrix = mnist_matrix[:n]
-        print(f"Matricize {perf_counter()-start}")
+        # print(f"Matricize {perf_counter()-start}")
         r_s = random.getstate()
         d_s = np.random.get_state()
 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     if comm.rank == 0: start = perf_counter()
     matrix_local = build_dense_spd_local(mnist_matrix,decay,grid_coord[0]*n_local, grid_coord[1]*n_local,n_local)
     if comm.rank == 0: 
-        print(f"Build local {perf_counter()-start}")
+        # print(f"Build local {perf_counter()-start}")
         stdout.flush()
     local_trace = 0
     total_trace = 0
