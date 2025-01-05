@@ -228,6 +228,175 @@ def build_gaussian_sketching(shape: tuple[int, int]):
 
 The algorithm as been implemented with particular attention to memory usage, by deleting (by reassignment) obsolete objects when necessary. The `numpy` and `scipy` packages have been used for linear algebra routines.
 
+### Parallelization on distributed systems
+
+As described in the lecture a distributed memory parallelization of the previously discussed algorithm was implemented. The parallelization was focused in the computation of $C = A\Omega$ and $B= \Omega^T A \Omega$.The rest of the algorithm is then executed on the rank 0 process, allowing `numpy` routines to use shared memory parallelization using OpenMP.
+
+In the following we assume that the computation has to be executed in $3\times3$ grid for a total of $P=9$ processes, each process gets assigned grid coordinates $(i,j)$ with $i,j\in 0, 1 ,2$.
+
+#### Computing $C = A\Omega$ and $B =\Omega^TC$
+
+Assume that whe have a sketching matrix $\Omega \in \mathbb{R}^{m \times l}$ and a SPSD matrix $A \in \mathbb{R}^{m \times m}$ with $m\mod P = 0$. Then the problem is partitioned as follows:
+
+$$
+    C = 
+\begin{pmatrix}
+A_{00} & A_{01} & A_{02} \\
+A_{10} & A_{11} & A_{12}\\
+A_{20} & A_{21} & A_{22}
+\end{pmatrix}
+\begin{pmatrix}
+\Omega_{0} \\
+\Omega_{1} \\
+\Omega_{2}
+\end{pmatrix}
+$$
+
+and
+
+$$
+        B = 
+        \begin{pmatrix}
+\Omega_{0}^T & \Omega_{1}^T &\Omega_{2}^T
+\end{pmatrix}
+\begin{pmatrix}
+A_{00} & A_{01} & A_{02} \\
+A_{10} & A_{11} & A_{12}\\
+A_{20} & A_{21} & A_{22}
+\end{pmatrix}
+\begin{pmatrix}
+\Omega_{0} \\
+\Omega_{1} \\
+\Omega_{2}
+\end{pmatrix}
+$$
+
+with $\Omega_i \in \mathbb{R}^{m/P\times l}$ and $A_{ij} \in \mathbb{R}^{m/P \times m/P}$.
+
+Each process with coordinates $(i,j)$ receives (or builds) $A_{i,j},\Omega_i,\Omega_j$ and then $C$ and $B$ are computed with the following scheme
+
+$$
+    \text{Process }(i,j) \text{ computes } C_{ij}=A_{ij}\Omega_j
+$$
+$$
+    \text{Sum-Reduction of } C_{ij} \text{ on each row to j=0, obtains } C_i = \sum_j C_{ij}
+$$
+$$
+    \text{Process }(i,j) \text{ computes } B_{ij}=\Omega_i^T C_{ij}
+$$
+$$
+    \text{Sum-Reduction of } C_{ij} \text{ on process 0 } B = \sum_{i,j} B_{ij}
+$$
+$$
+    \text{Gather between j=0 on process 0 } C_{i} \text{ to obtain } C = \begin{pmatrix}
+C_{0} \\
+C_{1} \\
+C_{2}
+\end{pmatrix}
+$$
+
+#### Building $\Omega$
+
+As explained before, the construction of Gaussian and BSRHT sketching matrices can be done independently by each process if all processes share the same state of the random number generator. In the implementation this is achieved by the following functions
+
+```python
+def build_srht_sketching_local(
+    shape: tuple[int, int], num_blocks, 
+    block_idx, r_state=None, d_state=None
+):
+    m_local = int(shape[0] / num_blocks)
+    l = shape[1]
+    if r_state != None:
+        random.setstate(r_state)
+    if d_state != None:
+        np.random.set_state(d_state)
+    if m_local > 0 and (m_local & (m_local - 1)) != 0:
+        raise ValueError
+    R = np.zeros((l, m_local))
+    for idx, value in 
+        enumerate(sorted(random.sample(range(0, m_local), l))):
+        R[idx, value] = 1
+    H = hadamard(m_local)
+    RH = R @ H
+    del R, H
+    for idx in range(0, block_idx + 1):
+        Dr = np.random.uniform(-1, 1, (m_local))
+        Dl = np.random.uniform(-1, 1, (l))
+    sigma_local = np.diag(Dl) @ RH @ np.diag(Dr)
+    return np.transpose(sigma_local * (1 / np.sqrt(l)))
+
+
+def build_gaussian_sketching_local(
+    shape: tuple[int, int], num_blocks,
+    block_idx, d_state=None
+):
+    m_local = int(shape[0] / num_blocks)
+    l = shape[1]
+    if d_state != None:
+        np.random.set_state(d_state)
+    if m_local > 0 and (m_local & (m_local - 1)) != 0:
+        raise ValueError
+    for idx in range(0, block_idx + 1):
+        sigma = np.random.normal(0, 1, (m_local, l))
+    return sigma * (1 / np.sqrt(l))
+```
+
+the random generator states `r_state` and `d_state` (respectively for the `random` package and `numpy` package) are broadcasted from process 0 before initialization.
+
+#### Parallel computation of $||A||$ 
+
+As we explained before, we need to compute $\text{trace}(A)$ to be able to perform an accuracy study of our implementation. In the implementation this is achieved in parallel by computing the trace of all $A_{i,i}$ on all processes with coordinates $i=j$. The partial sums are then reduced on process 0.
+
+#### Dataset handling and building $A$
+
+For our accuracy and performance test we will build a SPD matrix from the **MNIST** dataset.
+
+The matrix is assembled as follows:
+
+$$
+    A_{i,j} = \exp(-||x_i-x_j||^2/c^2)
+$$
+
+were $c$ is a constant *decay factor*.
+
+In the implementation, the matrix is assembled in parallel by broadcasting the **MNIST** dataset to all processes and then assembled using the function
+
+```python
+def build_dense_spd_local(
+    matrix: np.ndarray,
+    decay_factor: np.float64,
+    i_start: int,
+    j_start: int,
+    length: int,
+):
+    i_norm = np.sum(
+        matrix[i_start : i_start + length, :] ** 2, axis=1)[
+        :, np.newaxis
+    ]  
+    j_norm = np.sum(
+        matrix[j_start : j_start + length, :] ** 2, axis=1)[
+        np.newaxis, :
+    ]  
+    dist_squared = (
+        i_norm
+        + j_norm
+        - 2
+        * np.dot(
+            matrix[i_start : i_start + length, :],
+            matrix[j_start : j_start + length, :].T,
+        )
+    )  
+    matrix_out = np.exp(-dist_squared / (decay_factor**2))
+    return matrix_out
+
+```
+
+This seems to be the best approach since the **MNIST** dataset is relatively small ($70000\times 780$ double precision float, $\approx 500$MB)but the computation of the dense SPD matrix relatively expensive ($\mathcal{O}(n^2)$).
+
+#### QR of Z
+
+As previously described, the algorithms requires the QR factorization of a matrix $Z \in \mathbb{R}^{m\times l}$. Sources [**1**] and [**2**] suggest the employment of a specialized parallel algorithm like TSQR. Since the version implemented for *Project1* one did not function out of the box, I refrained from including it in the parallelization, and preferred to delegate the problem to `numpy`'s parallel routines.
+
 ## Accuracy and stability analysis  
 
 To study the accuracy of the algorithm I have run it on a matrix generated using the **MNIST** dataset as described in [**1**] with dimension $m=65536$ on a grid of 64 processes ($8\times8$) for both BSRHT and Gaussian sketching matrices.
@@ -242,6 +411,13 @@ As one can see from the results the algorithm remains stable all the tested conf
 
 ### Serial performance
 
+To have an overview of the scaling behaviour of the full algorithm, the serial version was run against matrices derived from the **MNIST** dataset of dimentions.
+
+<img src="results/plots/serial_runtime.png" alt="runtime" width="350" >
+
+The plot is in logarithmic in both the $x$ and $y$ axis.
+
+One can easily observe that duplicating $n$ quadruples the runtime. This hints that, to leading terms, the complexity of our algorithm is of $\mathcal{O}(n^2)$.
 ### Parallel performance
 
 To test the parallel efficiency of the algorithm a strong scaling study was performed using the maximum matrix size obtainable by the **MNIST** dataset of $n =65536$ for $k = 200 l =205$, wich seemed like parameters reasonably close to a real word scenario.
@@ -251,10 +427,15 @@ To test the parallel efficiency of the algorithm a strong scaling study was perf
 The runtime plot shows that the algorithm scales reasonably well ( the prot is $\ln_2$ in both axis) showing that quadrupling the number of processes reduces the runtime to one fourth. The last few points have a slight suboptimal behavior given that we probably reached the memory bandwidth limit.
 
 It is also interesting to compute the expected speedup,
+
 <img src="results/plots/parallel_speedup.png" alt="speedup" width="400" >
 
 This plot too shows a saturating behavior for a speedup of 23. It his hard to say if this is a Amdahl's saturation, due to the serial component of the code, or if a memory bandwidth saturation. I could however not test a multi-node setup due to missing hardware.
 It is noteworthy that no communication effects are tangible in the collected data.
+
+## Conclusion
+
+This project successfully implement a parallel, distributed k-rank Nyström approximation. With the implementation one could successfully reproduce results from [**1**]. The analysis of both performance and accuracy of the algorithm have show that it is suitable for the factorization and rank reduction of large matrices in a stable fashion. Some performance improvements are however still possible, like the employment of Tall and Skinny QR as the QR algorithm of choiche.
 
 ## References
 
