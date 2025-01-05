@@ -1,8 +1,6 @@
-# Final project Calcul haute performance Sorbonne M2 S1
+# Parallel Randomized Nyström for low-rank approximation
 
 > Author: Erik Fabrizzi
 
-# Topic: Randomized Nyström
+> Course: High performance computing for numerical methods and data analysis
 
-The goal of this project is to study the randomized Nystr¨om algorithm for computing a low rank
-approximation of a matrix that is symmetric positive semidefinite.
