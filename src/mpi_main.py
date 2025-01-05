@@ -65,10 +65,12 @@ if __name__ == '__main__':
     if len(argv) > 2: trunc = int(argv[2])
     else:trunc = 100
 
-    if len(argv) > 3: decay = int(argv[3])
-    else: decay = 100
+    if len(argv) > 3: l = int(argv[3])
+    else:l = trunc + 5
 
-    l = trunc + 5
+    if len(argv) > 4: decay = int(argv[4])
+    else: decay = 100
+    
     n = sub_len
     grid_side  = int(np.sqrt(comm.size))
     n_local = n//grid_side
@@ -145,7 +147,8 @@ if __name__ == '__main__':
         S =np.power(S,2)
         stop = perf_counter()
         norm_tot = (total_trace- np.sum(S))/total_trace
-        print(f"{comm.size} {n} {trunc} {decay} {norm_tot} {stop-start}")
+        # n trunc l norm time  decay comms 
+        print(f"{n}, {trunc}, {l}, {norm_tot}, {stop-start}, {decay}, {comm.size}")
         
         
 
