@@ -21,7 +21,6 @@ for proc in "${values_proc[@]}"; do
 
     output=$(srun -n"$proc" python src\\mpi_main.py 65536 200 )
     echo "$output" >> "$output_file"
-    fi
 done
     
 
