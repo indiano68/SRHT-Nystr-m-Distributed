@@ -4,3 +4,233 @@
 
 > Course: High performance computing for numerical methods and data analysis
 
+## Introduction
+
+The goal of this project is to demonstrate the Nyström method for low-rank approximation of large positive semi-definite matrices (**PSD**) and it's implementation on distributed systems with the aid of MPI. In particular the *block sub-sampled randomized Hadamard transformation* (**BSRHT**) will be employed as sketching technique for the implementation and the accuracy of this approach will be compared to the classic Gaussian sketching method. An overview of performance will be given.
+
+## Theoretical Background
+
+In this section we will give a brief introduction to *sketching*, the Nyström approximation and its truncation to rank $k$.
+
+### Random sketching
+
+The goal of sketching is to find an embedding of a high dimensional subspace into a low
+dimensional one, while preserving some geometry, with high probability. In this project we are 
+interested in sketching by means of *oblivious* $\ell2$-*subspace embeddings* (**OSE**), which are defined by
+the following property [**1**]:
+
+**Definition: (OSE)** Let $0\leq \epsilon < 1$ and  $0\leq \delta < 1$. Then a random matrix $\Omega \in \mathbb{R}^{l\times m}$  is said to be a $(\epsilon,\delta,d)$ OSE if for any fixed  $d$-dimensional subspace  $V \subseteq \mathbb{R}^n$
+
+$$
+    \forall x \in V, \phantom{00} ||x||^2_2-||\Omega x||^2_2 \leq \epsilon ||x||^2_2
+$$
+
+holds with probability $1-\delta$.
+
+Furthermore, as mentioned in the lecture [**2**],
+
+$$
+    \forall x_i,x_j \in V, \phantom{00} |\langle\Omega x_i, \Omega x_j \rangle - \langle x_i, x_j \rangle| \leq \epsilon||x_i||_2 ||x_j||_2
+$$
+
+holds with probability $1-\delta$.
+
+In other words an OSE is a random matrix that is capable to project an higher dimensional space into a lower dimensional one with $1-\delta$ probability of preserving the angles and magnitudes of the projected space up to some tolerance $\epsilon$.
+
+In this project 2 OSE that are well suited for parallel algorithms will be of interest:
+
+* Gaussian sketching (Random)
+* Block sub-sampled random Hadamard transform sketching
+
+#### Gaussian sketching
+
+It can be shown [**2**] that a matrix $\Omega \in \mathbb{R}^{m\times l}$ of random, normal, independent entries ($\mu=0, \Delta = 1$) multiplied by $1/\sqrt{l}$  is an OSE with 
+$$
+    l= O(\epsilon^{-2}(n+\log(1/\delta)))
+$$
+
+This sketching is well suited for parallel algorithms since, in the context of a block-row  partitioning $\Omega = [\Omega_1 \ldots \Omega_P]$ each block can be built independently by a process given that all processes in a distributed system share the same state for the random generator of choice.
+
+#### BSRHT Sketching 
+
+It can be shown [**1**] [**2**] that a sketching $\Omega \in \mathbb{R}^{l\times m} = [\Omega_1 \ldots \Omega_i \ldots \Omega_P]$ with
+$$
+    \Omega_i = \sqrt{\frac{m}{Pl}}=D_{Li}RHD_{Ri}
+$$
+
+where:
+
+* $R \in \mathbb{R}^{l\times m}$ formed by subset of $l$ rows of the identity, chosen uniformly at random
+* $H \in \mathbb{R}^{m/P\times m/P}$ is the normalized Walsh-Hadamard matrix
+* $D_{Li} \in \mathbb{R}^{l\times l}$ are diagonal indipendent random signs (uniformly distributed beween -1 and 1)
+* $D_{Ri} \in \mathbb{R}^{m/P\times m/P}$ are diagonal indipendent random signs (uniformly distributed beween -1 and 1)
+
+is an OSE with :
+
+$$
+l= O(\epsilon^{-2}(n+\ln(m/\delta))\ln(n/\delta))
+$$
+
+Blocks of this sketching can be again built independently in a distributed algorithm under common state of the random generator of choice.
+
+**Note:**  The Walsh-Hadamard matrix is recursively defined as: 
+
+$$
+    H_2 =\begin{pmatrix}
+1 & 1 \\
+1 & -1
+\end{pmatrix}, \phantom{00}   H_m =\begin{pmatrix}
+H_{m/2} & H_{m/2} \\
+H_{m/2} & -H_{m/2}
+\end{pmatrix}\in \mathbb{R}^{m\times m}
+$$
+
+### Nyström approximation and k-rank truncation methods
+
+As discussed in [**2**], given a SPSD matrix $A\in \mathbb{R}^{m\times m}$ and a OSE $\Omega \in \mathbb{R}^{m \times l}$, the Nyström Approximation,
+
+$$
+    [\![A]\!]_{\text{Ny}} = (A \Omega )(\Omega^T A \Omega)^\dagger(\Omega^T A)
+$$
+
+yields an approximation of $A$ of at most rank $l$ with favorable accuracy with respect to other random approximation methods like **RSVD**.
+
+The goal of this section is to explain how to perform a truncation of this approximation an arbitrary rank $k<l$ without performing an svd of the approximation, which is really costly for large matrices (time complexity of $O(n^3)$ for square matrices using Jacobi Rotations).
+
+The idea is to find a decomposition strategy that yields $U,\Sigma$ such that
+$$
+    [\![A]\!]_{\text{Ny}} =U\Sigma U^T
+$$
+by maintaining a low time complexity of the algorithm. Than this can be truncated as usual to obtain
+$$
+    [\![A]\!]_{\text{Ny,k}} =U_k\Sigma_k U_k^T,
+$$
+where we keep the entries of $U$ and $\Sigma$ relevant only to the first $k$ singular values of $[\![A]\!]_{\text{Ny}}$. 
+
+A possible method based on the eigenvalue decomposition of $B = \Omega A \Omega^T$ (rather than Cholesky Factorization [**2**]) is the following:
+$$
+    \text{Compute } C = A \Omega
+$$
+$$
+    \text{Compute } B = P D P^T = P D^{ \frac{1}{2}} D^{ \frac{1}{2}} P^T = (P D^{ \frac{1}{2}})(P D^{ \frac{1}{2}})^T = LL^T
+$$
+
+Were we have used an eigenvalue decomposition to factorize $B$.
+
+$$
+    \text{Compute } Z = CL^{-T} = QR
+$$
+
+Were $Z$ shall be computed by substitution rather than by inverting $L$.
+
+$$
+    \text{Compute } R = \tilde{U}\tilde{\Sigma}\tilde{V}^T
+$$
+
+Then a truncated approximation of $[\![A]\!]_{\text{Ny}}$ can be obtained as
+
+$$
+    [\![A]\!]_{\text{Ny},k} = Q\tilde{U}_k\tilde{\Sigma}^2_k\tilde{U}_k^TQ^T = U_k\Sigma_k U_k^T.
+$$
+
+since, 
+
+$$
+    [\![A]\!]_{\text{Ny}} = (A \Omega )(\Omega^T A \Omega)^\dagger(\Omega^T A) = CB^{-1}C^T
+$$
+$$
+    \phantom{[\![A]\!]_{\text{Ny}}} = C(LL^T)^{-1}C^T=CL^{-T}L^{-1}C^T\phantom{AA}
+$$
+$$
+    \phantom{[\![A]\!]_{\text{Ny}}} = Q\tilde{U}\tilde{\Sigma}\tilde{V}^T\tilde{V}\tilde{\Sigma}\tilde{U}^TQ^T = Q\tilde{U}\tilde{\Sigma}^2\tilde{U}Q^T
+$$
+$$
+    \phantom{[\![A]\!]_{\text{Ny}}} = U\Sigma U^T\phantom{AAAAAAAAAAAAAAA}
+$$
+
+### Additional note on the trace norm
+
+For a given SPSD matrix, we will later use the *trace norm* to evaluate the quality of the approximations obtained numerically,
+$$
+    \text{Relative Error} = \frac{|| A - [\![A]\!]_{\text{Ny,k}}||}{||A||}
+$$
+with 
+$$
+    ||A|| =\sum_i\sigma_i
+$$
+
+We however don't want to compute the SVD of A as we will be working with large matrices. To avoid that it is sufficient to notice that for an SPSD matrix the following holds
+$$
+    \text{trace}(A)=\sum_i\sigma_i = \sum_i\lambda_i
+$$
+
+where $\sigma_i$ and $\lambda_i$ are singular values and eigenvalues respectively (equal in this case).
+
+Therefore the previous expression can be reduced to 
+
+$$
+\frac{|| A - [\![A]\!]_{\text{Ny,k}}||}{||A||} = \frac{\text{trace}(A - [\![A]\!]_{\text{Ny,k}})}{\text{trace}(A)} 
+$$
+$$
+\phantom{\frac{|| A - [\![A]\!]_{\text{Ny,k}}||}{||A||}} = \frac{\text{trace}(A) - \text{trace}([\![A]\!]_{\text{Ny,k}})}{\text{trace}(A)} 
+$$
+$$
+\phantom{\frac{|| A - [\![A]\!]_{\text{Ny,k}}||}{||A||}} = 1-\frac{\text{trace}([\![A]\!]_{\text{Ny,k}})}{\text{trace}(A)}\phantom{AAAA}
+$$
+
+**Note** Here we used that since $A$  and $[\![A]\!]_{\text{Ny,k}}$ are SPSD then $A-[\![A]\!]_{\text{Ny,k}}$ is too.
+
+## Implementation
+
+Rather than presenting pseudocode, the algorithm to compute a $k$-truncated Nyström approximation of a given SPSD will be presented in `python`,
+
+```python
+def random_truncated_nystrom(
+    matrix: np.ndarray,
+    target_rank: int,
+    oversampling: int,
+    sketching: np.ndarray = np.empty((0)),
+):
+    if sketching.shape[0] == 0:
+        sketching = build_gaussian_sketching(
+            (matrix.shape[1], target_rank + oversampling)
+        )
+    C = matrix @ sketching
+    U, S, _ = np.linalg.svd(np.transpose(sketching) @ C)
+    S = np.sqrt(S)
+    S = U @ np.diag(S)
+    Z = np.linalg.solve(S, C.transpose()).transpose()
+    Q, R = np.linalg.qr(Z)
+    U, S, _ = np.linalg.svd(R)
+    U = U[:, :target_rank]
+    S = S[:target_rank]
+    return Q @ U, np.power(S, 2)
+
+```
+while the sketching matrices can be built as
+
+```python
+def build_srht_sketching(shape: tuple[int, int]):
+    H = hadamard(shape[0]) # Routine offered by scipy
+    Dr = np.random.uniform(-1, 1, (shape[0]))
+    Dl = np.random.uniform(-1, 1, (shape[1]))
+    R = np.zeros((shape[1], shape[0]))
+    for idx, value in enumerate(sorted(random.sample(
+        range(0, shape[0]), shape[1]
+        ))):
+        R[idx, value] = 1
+    matrix = np.diag(Dl) @ R @ H @ np.diag(Dr)
+    return np.transpose(matrix * (1 / np.sqrt(shape[1])))
+
+def build_gaussian_sketching(shape: tuple[int, int]):
+    return np.random.normal(0, 1, shape) * (1 / np.sqrt(shape[1]))
+```
+
+The algorithm as been implemented with particular attention to memory usage, by deleting (by reassignment) obsolete objects when necessary. The `numpy` and `scipy` packages have been used for linear algebra routines.
+
+## References
+
+* [**1**] Block subsampled randomized Hadamard transform for low-rank
+approximation on distributed architectures([link](https://inria.hal.science/hal-03828607/document))
+
+* [**2**] Lecture materials of *High performance computing for numerical methods and data analysis*, Sorbonne University, Academic Year 24-25.
