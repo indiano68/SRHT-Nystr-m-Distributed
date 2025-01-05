@@ -14,7 +14,7 @@ mkdir -p results
 
 values_proc=(1 4 16 64)
 
-output_file="results/parallel_runtime_${l}.csv"
+output_file="results/parallel_runtime_65536_200.csv"
 echo "n, trunc, l, norm, time, decay, comms" > "$output_file"  # Write the header to the CSV file
 
 for proc in "${values_proc[@]}"; do
