@@ -4,22 +4,22 @@
 #SBATCH --ntasks-per-node=72
 #SBATCH --time=2:00:00
 #SBATCH --export=NONE
-#SBATCH --job-name=parallel-runtime
-#SBATCH --output=parallel-runtime.o
+#SBATCH --job-name=serial-runtime
+#SBATCH --output=serial-runtime.o
 
 # Create the results directory if it doesn't exist
 module load python/mpi4py-3.1.1py3.9
 
 mkdir -p results
 
-values_proc=(1 4 16 64)
+values_dim=(1024 2048 4096 8192 16384 32768 65536)
 
-output_file="results/parallel_runtime_65536_200.csv"
+output_file="results/serial_runtime_200.csv"
 echo "n, trunc, l, norm, time, decay, comms" > "$output_file"  # Write the header to the CSV file
 
-for proc in "${values_proc[@]}"; do
+for dim in "${values_dim[@]}"; do
 
-    output=$(srun -n"$proc" python src/mpi_main.py 65536 200 )
+    output=$(srun -n1 python src/mpi_main.py "$dim" 200)
     echo "$output" >> "$output_file"
 done
     
