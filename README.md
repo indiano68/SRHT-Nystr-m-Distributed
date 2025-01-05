@@ -285,7 +285,7 @@ $$
     \text{Process }(i,j) \text{ computes } B_{ij}=\Omega_i^T C_{ij}
 $$
 $$
-    \text{Sum-Reduction of } C_{ij} \text{ on process 0 } B = \sum_{i,j} B_{ij}
+    \text{Sum-Reduction of } B_{ij} \text{ on process 0 } B = \sum_{i,j} B_{ij}
 $$
 $$
     \text{Gather between j=0 on process 0 } C_{i} \text{ to obtain } C = \begin{pmatrix}
