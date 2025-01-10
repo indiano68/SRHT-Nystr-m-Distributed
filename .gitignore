@@ -5,3 +5,11 @@ datasets/
 *_test.py
 *.qti*
 *.pdf
+tex_src/.vscode/
+tex_src/*.aux
+tex_src/*.fdb_latexmk
+tex_src/*.log
+tex_src/*.out
+tex_src/*snm
+tex_src/*.synctex.gz
+tex_src/*.loc
