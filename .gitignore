@@ -13,3 +13,6 @@ tex_src/*.out
 tex_src/*snm
 tex_src/*.synctex.gz
 tex_src/*.loc
+tex_src/*.fls
+tex_src/*.nav
+tex_src/*.toc
